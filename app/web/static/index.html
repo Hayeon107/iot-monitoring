@@ -1,0 +1,393 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Monitoring Dashboard</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 30px;
+            background: #f3f5f9;
+            color: #202938;
+        }
+
+        h1 { margin-bottom: 6px; }
+        h2 { font-size: 20px; }
+
+        .subtitle {
+            color: #667085;
+            margin-bottom: 24px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card, .panel {
+            background: white;
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px #0000000a;
+            min-width: 0;
+        }
+
+        .label {
+            color: #667085;
+            font-size: 14px;
+        }
+
+        .value {
+            font-size: 30px;
+            font-weight: bold;
+            margin-top: 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .panel {
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            white-space: nowrap;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #eaecf0;
+        }
+
+        th {
+            color: #667085;
+            font-size: 13px;
+        }
+
+        #sensorMessage, #statusMessage {
+            color: #667085;
+            margin-top: 14px;
+            font-size: 14px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .online {
+            background: #dcfae6;
+            color: #067647;
+        }
+
+        .offline {
+            background: #fee4e2;
+            color: #b42318;
+        }
+
+        .unknown {
+            background: #f2f4f7;
+            color: #475467;
+        }
+
+        @media (max-width: 850px) {
+            .cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 500px) {
+            body { padding: 16px; }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        
+        .alert-panel {
+            padding: 18px 22px;
+            margin-bottom: 24px;
+            border-radius: 12px;
+            background: #dcfae6;
+            color: #067647;
+            font-weight: bold;
+        }
+
+        .alert-panel.warning {
+            background: #fee4e2;
+            color: #b42318;
+        }
+
+        .alert-detail {
+            margin-top: 6px;
+            font-size: 14px;
+            font-weight: normal;
+        }
+
+    </style>
+</head>
+
+<body>
+    <h1>IoT Monitoring</h1>
+    <div class="subtitle">센서 데이터 및 장치 상태 모니터링</div>
+
+    <div class="cards">
+        <div class="card">
+            <div class="label">최근 온도</div>
+            <div class="value" id="temperature">-- °C</div>
+        </div>
+
+        <div class="card">
+            <div class="label">최근 습도</div>
+            <div class="value" id="humidity">-- %</div>
+        </div>
+
+        <div class="card">
+            <div class="label">온라인 장치</div>
+            <div class="value" id="onlineCount">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">오프라인 장치</div>
+            <div class="value" id="offlineCount">--</div>
+        </div>
+    </div>
+
+    
+    <div id="temperatureAlert" class="alert-panel">
+        온도 상태 확인 중...
+        <div id="alertDetail" class="alert-detail"></div>
+    </div>
+
+
+    <div class="panel">
+        <h2>장치 상태</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>장치 ID</th>
+                    <th>현재 상태</th>
+                    <th>마지막 측정 시각</th>
+                </tr>
+            </thead>
+            <tbody id="statusRows"></tbody>
+        </table>
+
+        <div id="statusMessage">장치 상태를 불러오는 중...</div>
+    </div>
+
+    <div class="panel">
+        <h2>최근 센서 데이터</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>센서 ID</th>
+                    <th>온도</th>
+                    <th>습도</th>
+                    <th>측정 시각</th>
+                </tr>
+            </thead>
+            <tbody id="sensorRows"></tbody>
+        </table>
+
+        <div id="sensorMessage">센서 데이터를 불러오는 중...</div>
+    </div>
+
+    <script>
+        function addCell(row, value) {
+            const td = document.createElement("td");
+            td.textContent = value ?? "-";
+            row.appendChild(td);
+            return td;
+        }
+
+        async function loadSensorData() {
+            const message = document.getElementById("sensorMessage");
+
+            try {
+                const response = await fetch("/api/sensor-data");
+
+                if (!response.ok) {
+                    throw new Error("API 응답 오류: " + response.status);
+                }
+
+                const result = await response.json();
+                const rows = result.data || [];
+
+                document.getElementById("temperature").textContent =
+                    rows.length && rows[0].temperature != null
+                        ? Number(rows[0].temperature).toFixed(1) + " °C"
+                        : "-- °C";
+
+                document.getElementById("humidity").textContent =
+                    rows.length && rows[0].humidity != null
+                        ? Number(rows[0].humidity).toFixed(1) + " %"
+                        : "-- %";
+
+                
+                // 온도 임계값 경고 기능
+                const alertBox = document.getElementById("temperatureAlert");
+                const alertDetail = document.getElementById("alertDetail");
+
+                if (!rows.length || rows[0].temperature == null) {
+                    alertBox.classList.remove("warning");
+                    alertBox.firstChild.textContent = "온도 데이터 없음";
+                    alertDetail.textContent =
+                        "센서 데이터가 들어오는지 확인해 주세요.";
+                } else {
+                    const temperature = Number(rows[0].temperature);
+
+                    if (temperature > 30) {
+                        alertBox.classList.add("warning");
+                        alertBox.firstChild.textContent = "⚠️ 고온 경고";
+                        alertDetail.textContent =
+                            `현재 온도 ${temperature.toFixed(1)}°C · 임계값 30°C 초과`;
+                    } else {
+                        alertBox.classList.remove("warning");
+                        alertBox.firstChild.textContent = "✓ 온도 정상";
+                        alertDetail.textContent =
+                            `현재 온도 ${temperature.toFixed(1)}°C · 임계값 30°C 이하`;
+                    }
+                }
+
+
+                const tbody = document.getElementById("sensorRows");
+                tbody.replaceChildren();
+
+                for (const item of rows) {
+                    const tr = document.createElement("tr");
+
+                    addCell(tr, item.sensor_id);
+                    addCell(
+                        tr,
+                        item.temperature == null
+                            ? "-"
+                            : Number(item.temperature).toFixed(1) + " °C"
+                    );
+                    addCell(
+                        tr,
+                        item.humidity == null
+                            ? "-"
+                            : Number(item.humidity).toFixed(1) + " %"
+                    );
+                    addCell(tr, item.measured_at);
+
+                    tbody.appendChild(tr);
+                }
+
+                message.textContent =
+                    `조회 ${rows.length}건 · 5초마다 자동 갱신`;
+
+            } catch (error) {
+                message.textContent =
+                    "센서 데이터 조회 실패: " + error.message;
+            }
+        }
+
+        async function loadDeviceStatus() {
+            const message = document.getElementById("statusMessage");
+
+            try {
+                const response = await fetch("/api/device-status");
+
+                if (!response.ok) {
+                    throw new Error("API 응답 오류: " + response.status);
+                }
+
+                const result = await response.json();
+                const rows = result.data || [];
+
+                // 최신 상태 메시지만 장치별로 하나씩 남긴다.
+                const latestByDevice = new Map();
+
+                for (const item of rows) {
+                    if (!latestByDevice.has(item.sensor_id)) {
+                        latestByDevice.set(item.sensor_id, item);
+                    }
+                }
+
+                const devices = [...latestByDevice.values()];
+                let online = 0;
+                let offline = 0;
+
+                const tbody = document.getElementById("statusRows");
+                tbody.replaceChildren();
+
+                for (const item of devices) {
+                    const rawStatus = String(
+                        item.device_status ?? "unknown"
+                    );
+                    const normalized = rawStatus.trim().toLowerCase();
+
+                    let statusClass = "unknown";
+                    let statusLabel = rawStatus;
+
+                    if (normalized === "online") {
+                        online++;
+                        statusClass = "online";
+                        statusLabel = "온라인";
+                    } else if (normalized === "offline") {
+                        offline++;
+                        statusClass = "offline";
+                        statusLabel = "오프라인";
+                    } else {
+                        statusLabel = rawStatus;
+                    }
+
+                    const tr = document.createElement("tr");
+                    addCell(tr, item.sensor_id);
+
+                    const statusCell = addCell(tr, "");
+                    const badge = document.createElement("span");
+                    badge.className = "status " + statusClass;
+                    badge.textContent = statusLabel;
+                    statusCell.appendChild(badge);
+
+                    addCell(tr, item.measured_at);
+                    tbody.appendChild(tr);
+                }
+
+                document.getElementById("onlineCount").textContent = online;
+                document.getElementById("offlineCount").textContent = offline;
+
+                message.textContent =
+                    `장치 ${devices.length}대 · 5초마다 자동 갱신`;
+
+                if (devices.length === 0) {
+                    message.textContent =
+                        "저장된 장치 상태 데이터가 없습니다.";
+                }
+
+            } catch (error) {
+                message.textContent =
+                    "장치 상태 조회 실패: " + error.message;
+            }
+        }
+
+        async function refreshDashboard() {
+            await Promise.all([
+                loadSensorData(),
+                loadDeviceStatus()
+            ]);
+        }
+
+        refreshDashboard();
+        setInterval(refreshDashboard, 5000);
+    </script>
+</body>
+</html>

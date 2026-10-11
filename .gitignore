@@ -1,0 +1,23 @@
+# Python 가상환경
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# 환경변수 및 비밀정보
+.env
+.env.*
+!.env.example
+
+# 로그 및 임시 파일
+*.log
+logs/
+*.tmp
+
+# 운영체제 및 편집기
+.DS_Store
+Thumbs.db
+.vscode/
+
+# 로컬 데이터
+mariadb_data/

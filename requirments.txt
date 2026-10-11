@@ -1,0 +1,6 @@
+
+pika
+PyMySQL
+python-dotenv
+fastapi
+uvicorn[standard]
